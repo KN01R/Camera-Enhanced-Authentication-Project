@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hashing Example</title>
+</head>
+<link rel="stylesheet" href="mainpageCSS.css">
+<body>
+<button id="backtohome" onclick="backtohome()">Back</button>
+<div id="SaltGenerator">
+    <!-- we really need to fix how we format the body of the page this is a hot mess -->
+        <h2>Sign Up Initialization</h2>
+        <p>Please provide any image in order to randomize the password.</p>
+        <br>
+        <input type="file" id="fileInput" accept=".jpg, .jpeg, .png" onchange="handleFile()">
+        <br>
+        <img id="image" style="display: none;">
+        <canvas id="canvas" style="display: none;"></canvas>
+        <p>Or, take a picture of yourself.</p>
+        <button onclick="showCamera()">Access Camera</button>
+        <button onclick="enterLoginPage()">Go to Login Page</button>
+
+        <div id="container" style="display: none;">
+            <video autoplay="true" id="camerainput"></video>
+            <canvas id="camerasensor" style="display: none;"></canvas>
+        </div>
+        <img src="//:0" alt="" id="cameraoutput" style="display: none;">
+        <button id="trigger" onclick="takePicture()" style="display: none;">Take a picture</button>
+        <button id="retake" onclick="showStream()" style="display: none;">Re-take picture</button>
+        <p id="GenSuccess"></p>
+        <button id="SuccessButton" onclick="ShowLogin()" style="display: none;">Please Continue to the Login Page</button>
+</div>
+
+<div id="SignUpPage" style="display: none;">
+    <h2>Sign Up</h2>
+    <p><input type="text" id="usnlogin" value="" placeholder="Username"></p>
+    <p><input type="text" id="pwlogin" value="" placeholder="Password"></p>
+    <button onclick="runHash()">Confirm</button>
+    <p id="Register"></p>
+</div>
+
+<div id="LoginPage" style="display:none;">
+    <h2>Login</h2>
+    <p><input type="text" id="usnlogin1" value="" placeholder="Username"></p>
+    <p><input type="text" id="pwlogin1" value="" placeholder="Password"></p>
+    <button onclick="findData()">Confirm</button>
+    <p id="ErrorMessage"></p>
+</div>
+
+<div id="databaseEdit" style="display: none;">
+<table id="data-table">
+    <thead>
+        <tr>
+            <th>Username</th>
+            <th>Password</th>
+            <th>Salt1</th>
+            <th>Iterations</th>
+        </tr>
+    </thead>
+    <tbody>
+        
+    </tbody>
+</table>
+</div>
+
+<div id="Dashboard">
+    <div id="NavBar">
+        <p>Welcome, admin</p>
+        <a href="#" onclick="hideContent()">Home</a>
+        <a href="#" onclick="showDatabase()">Users</a>
+        <a href="#" onclick="openSettings()">Terminal</a>
+    </div>
+
+    <div id="Content">
+        <h1>Administrator Dashboard</h1>
+        <p>Welcome to the dashboard. Manage users and settings here.</p>
+    
+
+        <div id="userCount">
+            Total Users:
+        </div>
+    </div>
+    <div id="Settings">
+        <p>Import Database using CSV:</p>
+        <input type="file" id="fileInputImp" accept=".csv" onchange="importCSV()">
+
+        <p>Export Database to CSV</p>
+        <button onclick="GetUserData()">Export</button>
+    </div>
+</div>
+
+<script>
+
+const container = document.querySelector("#container");
+const video = document.querySelector("#camerainput");
+const canvas = document.querySelector("#camerasensor")
+const camTrigger = document.querySelector("#trigger");
+const photo = document.querySelector("#cameraoutput");
+salt = "";
+rgbValues = [];
+iterations = "";
+
+
+// Camera Section
+
+
+
+function showCamera() {
+    if ( container.style.display === "none") {
+         container.style.display = "block";
+        // photo.style.display = "block";
+        camTrigger.style.display = "block";
+        startCamera();
+    } else {
+        container.style.display = "none";
+        photo.style.display = "none";
+        camTrigger.style.display = "none";
+        stopCamera();
+    };
+};
+
+function startCamera() {
+    navigator.mediaDevices.getUserMedia({ video: true })
+        .then(function (stream) {
+            video.srcObject = stream;
+        })
+        .catch(function (error) {
+                console.error('error accessing camera :(');
+        });
+};
+
+function stopCamera() {
+            const stream = video.srcObject;
+            const tracks = stream.getTracks();
+
+            tracks.forEach(track => track.stop());
+            video.srcObject = null;
+    };
+
+function showStream() {
+    container.style.display = "block";
+    photo.style.display = "none";
+    camTrigger.style.display = "block";
+    document.getElementById("retake").style.display = "none";
+}
+function takePicture() {
+    camTrigger.style.display = "none";
+    container.style.display = "none";
+    photo.style.display = "block";
+    document.getElementById("retake").style.display = "block";
+    const ctx1 = canvas.getContext('2d');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight; // fixed typo 
+    ctx1.drawImage(video, 0, 0, canvas.width, canvas.height); // another wan
+        photo.src = canvas.toDataURL("image/png");
+        const imgDataCam = ctx1.getImageData(0, 0, canvas.width, canvas.height);
+        const pixelsCam = imgDataCam.data
+
+    for (let i = 0; i < pixelsCam.length; i += 4) {
+        const red = pixelsCam[i];
+        const green = pixelsCam[i + 1];
+        const blue = pixelsCam[i + 2];
+        // we can include the alpha channel too if we want: const alpha = pixels[i + 3];
+
+        rgbValues.push([red, green, blue]);
+        };
+
+        // console.log(rgbValues);
+        calcTotal();
+    };
+
+function handleFile() {
+    const fileInput = document.getElementById('fileInput');
+    const image = document.getElementById('image');
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+
+    const file = fileInput.files[0];
+    const reader = new FileReader();
+
+    reader.onload = function (e) {
+        image.onload = function () {
+                canvas.width = image.width;
+                canvas.height = image.height;
+                 ctx.drawImage(image, 0, 0, image.width, image.height);
+
+                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                const pixels = imageData.data;
+
+                    // const rgbValues = [];
+
+                for (let i = 0; i < pixels.length; i += 4) {
+                    const red = pixels[i];
+                    const green = pixels[i + 1];
+                    const blue = pixels[i + 2];
+                    // we can include the alpha channel too if we want: const alpha = pixels[i + 3];
+
+                    rgbValues.push([red, green, blue]);
+                    }
+
+                    calcTotal();
+            };
+                image.src = e.target.result;
+                
+            };
+
+            reader.readAsDataURL(file);
+        };
+
+
+function calcTotal() {
+                let TotalRed = 0
+                let TotalGreen = 0
+                let TotalBlue = 0
+                    // pick between red, green or blue values 
+                const rgbSelector = [0, 1, 2];
+                const randSelector = rgbSelector[Math.floor(Math.random()* rgbSelector.length)]
+
+                switch (randSelector) {
+                    case 0:
+                        for (let i = 0; i < rgbValues.length; i++) {
+                            TotalRed += rgbValues[i][0];
+                            salt = TotalRed;
+                        };
+                    console.log(TotalRed);
+                    break;
+                    case 1:
+                        for (let i = 0; i < rgbValues.length; i++) {
+                        TotalGreen += rgbValues[i][1];
+                        salt = TotalGreen;
+                    };
+                    console.log(TotalGreen);
+                    break;
+                        case 2:
+                        for (let i = 0; i < rgbValues.length; i++) {
+                        TotalBlue += rgbValues[i][2];
+                        salt = TotalBlue;
+                    };
+                    console.log(TotalBlue);
+                    break;
+                    };
+     
+                    for(let s = 0; s < 4; s++)  {              
+                        const symbol = "!@#$%^&*(){}_-+=`~|:;<>/?,.£øŒÄ";
+                        var rnum = Math.floor(Math.random()*31)
+                        const chosen = symbol.charAt(rnum)
+                        salt = String(salt) + chosen;
+                    };
+                    
+                    document.getElementById("SuccessButton").style.display = "block";
+}
+// Login Section
+
+
+
+function ShowLogin() {
+    document.getElementById("SignUpPage").style.display="block";
+    document.getElementById("SaltGenerator").style.display="none";
+}
+
+function hash(input,salt,iterations)
+ {
+    iterations = Math.floor(Math.random()*5 + 5);
+     
+     for(let s = 0; s < 4; s++)
+     {
+         const symbol = "!@#$%^&*(){}_-+=`~|:;<>/?,.£øŒÄ";
+         var rnum = Math.floor(Math.random()*31)
+         const chosen = symbol.charAt(rnum)
+         salt = String(salt) + chosen;
+     }
+
+    let combinedData = input + salt; 
+
+     for (let z=0; z < iterations; z++)
+     {
+         let key = BigInt(0);
+              for(let i = 0; i < combinedData.length; i++)
+                 {
+                 const charCode = BigInt(combinedData.codePointAt(i));
+                 key = (key << BigInt(10)) - key + charCode;
+                 key &= key;
+                 };
+     combinedData = key.toString()
+     }
+     console.log(iterations);
+     return combinedData;
+ };
+
+function runHash()
+{
+    input = document.getElementById("pwlogin").value;
+    hashedValue = hash(input,salt);
+    console.log('input:', input);
+    console.log('Hashed Value:', hashedValue);
+    console.log(salt);
+
+    const newusn = document.getElementById("usnlogin").value;
+
+    // open db
+    const request = indexedDB.open('newDatabase', 1);
+
+    request.onupgradeneeded = function(event) {
+        const db = event.target.result;
+
+        const objectStore = db.createObjectStore('users', { keyPath: 'username'});
+    }; 
+
+    
+    request.onsuccess = function(event) {
+        const db = event.target.result;
+        
+        const transaction = db.transaction(['users'], 'readwrite');
+        const objectStore = transaction.objectStore('users');
+
+        const userObject = { username: newusn, password: hashedValue, salt1: salt, iteration: iterations};
+        const addRequest = objectStore.add(userObject);
+
+        addRequest.onsuccess = function() {
+            console.log('User registered successfully.');
+            document.getElementById("Register").innerHTML="Registered successfully.";
+        };
+
+        transaction.oncomplete = function() {
+        db.close();
+    };
+    };
+};
+
+
+ function hash2(input,salt,iteration) {
+    console.log(iteration)
+    let combinedData = input + salt; 
+    
+     for (let z=0; z < iteration; z++)
+     {
+         let key = BigInt(0);
+              for(let i = 0; i < combinedData.length; i++)
+                 {
+                 const charCode = BigInt(combinedData.codePointAt(i));
+                 key = (key << BigInt(10)) - key + charCode;
+                 key &= key;
+                 };
+     combinedData = key.toString()
+     }
+     return combinedData;
+ };
+
+function enterLoginPage() {
+    document.getElementById("SignUpPage").style.display = "none";
+    document.getElementById("LoginPage").style.display = "block";
+    document.getElementById("SaltGenerator").style.display = "none";
+};
+
+
+
+// Database Section
+
+
+
+function GetUserData() {
+    const request = indexedDB.open('newDatabase', 1);
+
+    request.onsuccess = function(event) {
+        const db = event.target.result;
+        
+        const transaction = db.transaction(['users'], 'readonly');
+        const objectStore = transaction.objectStore('users');
+        transaction.onsuccess = function() {
+            db.close();
+        };
+
+        const cursorRequest = objectStore.openCursor();
+
+        const contentCsv = []; 
+
+        cursorRequest.onsuccess = function(event) {
+            const cursor = event.target.result;
+
+            if (cursor) {
+                const rowCsv = `${cursor.value.username},${cursor.value.password},${cursor.value.salt1}\n`;
+
+                contentCsv.push(rowCsv);
+                cursor.continue();
+            }
+            else {
+                const csvBlob = new Blob(contentCsv, { type: 'text/csv' });
+
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(csvBlob);
+                link.download = 'exported_data.csv';
+
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+
+                console.log('CSV export complete!');
+            };
+        };
+    };
+};
+
+function importCSV() {
+    fileInputImp = document.getElementById("fileInputImp");
+    const fileCsv = fileInputImp.files[0];
+        const csvReader = new FileReader();
+
+        csvReader.onload = function(event) {
+            const csvData = event.target.result;
+            const dataArray = parseCSV(csvData);   
+            importDataIntoIndexedDB(dataArray);    
+    };
+    csvReader.readAsText(fileCsv);
+};
+
+// bug in function that creates an extra blank object every time i load a csv file, idk if its because im opening the file before importing or its trying to find a header row that doesnt exist. Gaben pls fix.
+function parseCSV(csvData) {
+    const rows = csvData.split('\n');
+    const dataArray = [];
+
+    for (let i = 0; i < rows.length; i++) {
+        const values = rows[i].split(',');
+        const rowObject = {};
+        rowObject.username = values[0];
+        rowObject.password = values[1];
+        rowObject.salt = values[2];
+
+        dataArray.push(rowObject);
+    }
+
+  console.log(dataArray);
+};
+
+function importDataIntoIndexedDB(dataArray) {
+    const request = indexedDB.open('newDatabase', 1);
+
+  request.onupgradeneeded = function(event) {
+    const db = event.target.result;
+    const objectStore = db.createObjectStore('users', { keyPath: 'username' });
+  };
+
+  request.onsuccess = function(event) {
+    const db = event.target.result;
+    const transaction = db.transaction(['users'], 'readwrite');
+    const objectStore = transaction.objectStore('users');
+
+    for (let i = 0; i < dataArray.length; i++) {
+      const userObject = dataArray[i];
+      const addRequest = objectStore.add(userObject);
+
+      addRequest.onerror = function() {
+        console.error('Error adding user:', userObject);
+      };
+    }
+
+    transaction.oncomplete = function() {
+      console.log('Data imported into IndexedDB successfully.');
+      db.close();
+    };
+  };
+
+  request.onerror = function(event) {
+    console.error('Error opening database:', event.target.error);
+  };
+};
+
+function clearAll() {
+    const request = indexedDB.open('newDatabase', 1);
+
+    request.onsuccess = function (event) {
+        const db = event.target.result;
+        const transaction = db.transaction(['users'], 'readwrite');
+        const objectStore = transaction.objectStore('users');
+
+        const clearRequest = objectStore.clear();
+
+        clearRequest.onsuccess = () => {
+            console.log('All records cleared successfully.');
+        }
+        
+        clearRequest.onerror = () => {
+            console.log('Failed to clear records.')
+        }
+
+        transaction.oncomplete = () => {
+            db.close();
+        };
+    };
+};
+
+function findData() {
+    const usr = document.getElementById('usnlogin1').value;
+    const pword = document.getElementById('pwlogin1').value;
+    const request = indexedDB.open('newDatabase', 1);
+
+    request.onsuccess = (event) => {
+        const db = event.target.result;
+
+        const transaction = db.transaction(['users'], 'readonly');
+        const objectStore = transaction.objectStore('users');
+
+        const cursorRequest = objectStore.openCursor();
+
+        cursorRequest.onsuccess = (event) => {
+            const cursor = event.target.result;
+
+            if (cursor) {
+                if (cursor.value.username === usr) {
+                    const input = pword;
+                    const salt = cursor.value.salt1;
+                    const iteration = cursor.value.iteration;
+                    const checkPassword = hash2(input, salt, iteration);
+                    
+                    if (checkPassword === cursor.value.password) {
+                        console.log('Success');
+                    } else {
+                        alert('Incorrect password. Please try again.');
+                        document.getElementById("usnlogin1").value="";
+                        document.getElementById("pwlogin1").value="";
+                    };
+                    return;
+                };
+                cursor.continue();
+            } else {
+                if (usr == "admin" && pword == "penaburasic123") {
+                    document.getElementById("Dashboard").style.display = "block";
+                    document.getElementById("LoginPage").style.display = "none";
+                    console.log('Successfully logged in as administrator.');
+                    document.getElementById("usnlogin1").value="";
+                    document.getElementById("pwlogin1").value="";
+                } else {
+                    alert('Username not found. Please ensure the correct information is entered.');
+                    document.getElementById("usnlogin1").value="";
+                    document.getElementById("pwlogin1").value="";
+                };
+            };
+        };
+        cursorRequest.onerror = () => {
+            console.log('Failed to get valid credentials');
+        };
+    };
+
+    request.onerror = (event) => {
+        console.log('Unable to open database.');
+    };
+}
+
+
+
+// debug mode func
+
+function showDatabase() {
+    document.getElementById("Settings").style.display = "none"; 
+    document.getElementById("databaseEdit").style.display = "block";
+    document.getElementById("LoginPage").style.display = "none";
+    document.getElementById("SignUpPage").style.display = "none";
+    document.getElementById("Content").style.display = "none";
+}
+
+addEventListener("DOMContentLoaded", (event) => {
+    databaseInterface();
+});
+
+function databaseInterface() {
+
+    const tableBody = document.querySelector("#data-table tbody");
+
+        
+    const request = indexedDB.open("newDatabase", 1);
+
+            request.onsuccess = (event) => {
+                const db = event.target.result;
+                const transaction = db.transaction(['users'], "readonly");
+                const objectStore = transaction.objectStore('users');
+
+                const cursorRequest = objectStore.openCursor();
+
+                cursorRequest.onsuccess = (cursorEvent) => {
+                    const cursor = cursorEvent.target.result;
+                    if (cursor) {
+                        const rowData = cursor.value;
+                        const row = tableBody.insertRow();
+
+                        Object.keys(rowData).forEach((key, index) => {
+                            const cell = row.insertCell(index);
+                            if (key === 'password') {
+                                const truncatedPassword = rowData[key].length > 12 ? rowData[key].substring(0, 12) + '...' : rowData[key];
+                                cell.textContent = truncatedPassword;
+                            } else {
+                                cell.textContent = rowData[key];
+                            }
+                        });
+                        
+                        const deleteButton = document.createElement("button");
+                        deleteButton.textContent = "Delete";
+                        deleteButton.classList.add('delete-button');
+                        deleteButton.addEventListener("click", () => {
+                            const db = event.target.result;
+                            const transaction = db.transaction(['users'], "readwrite");
+                            const objectStore = transaction.objectStore('users');
+                            
+                            const deleteRequest = objectStore.delete(cursor.key);
+
+                            deleteRequest.onsuccess = (event) => {
+                                console.log('Record has been deleted.')
+                            }
+                            
+                            deleteRequest.onerror = () => {
+                                console.log('Failed to delete record.')
+                            }
+                            
+                            row.remove();
+                        });
+
+                        row.insertCell(Object.keys(rowData).length).appendChild(deleteButton);
+
+
+                        cursor.continue();
+                    };
+                };
+            };
+};
+
+function hideContent() {
+    document.getElementById("Content").style.display = "block";
+    document.getElementById("databaseEdit").style.display = "none";
+    document.getElementById("Settings").style.display = "none"; 
+}
+
+function backtohome() {
+    document.getElementById("databaseEdit").style.display = "none";
+    document.getElementById("SignUpPage").style.display = "block";
+    document.getElementById("admin-mode").style.display = "block";
+    document.getElementById("backtohome").style.display = "none";
+}
+
+function openSettings() {
+    document.getElementById("Settings").style.display = "block"; 
+    document.getElementById("Content").style.display = "none";
+    document.getElementById("databaseEdit").style.display = "none";
+}
+
+</script>
+</body>
